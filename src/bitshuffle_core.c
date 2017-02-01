@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 
 
 #if defined(__AVX2__) && defined (__SSE2__)
@@ -23,6 +24,8 @@
 #if defined(__SSE2__)
 #define USESSE2
 #endif
+#undef USEAVX2
+#undef USESSE2
 
 
 // Conditional includes for SSE2 and AVX2.
@@ -167,8 +170,43 @@ int64_t bshuf_trans_bit_byte_remainder(const void* in, void* out, const size_t s
 
     for (ii = start_byte / 8; ii < nbyte_bitrow; ii ++) {
         x = in_b[ii];
+	{
+	  int b;
+	  puts("in: ");
+	  for (b = 63; b >= 0; b--) {
+	    if (x & ((uint64_t)1 << b)) {
+	      putchar('1');
+	    } else {
+	      putchar('0');
+	    }
+	    if (b % 8 == 0) {
+	      putchar('\n');
+	    }
+	  }
+	}
         TRANS_BIT_8X8(x, t);
+	{
+	  int b;
+	  puts("out: ");
+	  for (b = 63; b >= 0; b--) {
+	    if (x & ((uint64_t)1 << b)) {
+	      putchar('1');
+	    } else {
+	      putchar('0');
+	    }
+	    if (b % 8 == 0) {
+	      putchar('\n');
+	    }
+	  }
+	  putchar('\n');
+	}
+	/*
         for (kk = 0; kk < 8; kk ++) {
+            out_b[kk * nbyte_bitrow + ii] = x;
+            x = x >> 8;
+        }
+	*/
+	for (kk = 7; kk >= 0; kk --) {
             out_b[kk * nbyte_bitrow + ii] = x;
             x = x >> 8;
         }
@@ -226,11 +264,103 @@ int64_t bshuf_trans_bit_elem_scal(const void* in, void* out, const size_t size,
     tmp_buf = malloc(size * elem_size);
     if (tmp_buf == NULL) return -1;
 
+    {
+      int s;
+      for (s = 0; s < size; s++) {
+	int e;
+	for (e = 0; e < elem_size; e++) {
+	  unsigned char c = ((char *)in)[s * elem_size + e];
+	  int b;
+	  for (b = 7; b >= 0; b--) {
+	    if (c & (1 << b)) {
+	      putchar('1');
+	    } else {
+	      putchar('0');
+	    }
+	  }
+	  if (e == elem_size - 1) {
+	    putchar('\n');
+	  } else {
+	    putchar(' ');
+	  }
+	}
+      }
+      putchar('\n');
+    }
     count = bshuf_trans_byte_elem_scal(in, out, size, elem_size);
     CHECK_ERR_FREE(count, tmp_buf);
+    {
+      int e;
+      for (e = 0; e < elem_size; e++) {
+	int s;
+	for (s = 0; s < size; s++) {
+	  unsigned char c = ((char *)out)[e * size + s];
+	  int b;
+	  for (b = 7; b >= 0; b--) {
+	    if (c & (1 << b)) {
+	      putchar('1');
+	    } else {
+	      putchar('0');
+	    }
+	  }
+	  if (s == size - 1) {
+	    putchar('\n');
+	  } else {
+	    putchar(' ');
+	  }
+	}
+      }
+      putchar('\n');
+    }
     count = bshuf_trans_bit_byte_scal(out, tmp_buf, size, elem_size);
     CHECK_ERR_FREE(count, tmp_buf);
+    {
+      int k;
+      for (k = 0; k < 8; k++) {
+	int s;
+	for (s = 0; s < (size * elem_size) / 8; s++) {
+	  unsigned char c = ((char *)tmp_buf)[k * ((size * elem_size) / 8) + s];
+	  int b;
+	  for (b = 7; b >= 0; b--) {
+	    if (c & (1 << b)) {
+	      putchar('1');
+	    } else {
+	      putchar('0');
+	    }
+	  }
+	  if (s == (size * elem_size) / 8 - 1) {
+	    putchar('\n');
+	  } else {
+	    putchar(' ');
+	  }
+	}
+      }
+      putchar('\n');
+    }
     count = bshuf_trans_bitrow_eight(tmp_buf, out, size, elem_size);
+    {
+      int e;
+      for (e = 0; e < elem_size * 8; e++) {
+	int s;
+	for (s = 0; s < size / 8; s++) {
+	  unsigned char c = ((char *)out)[e * (size / 8) + s];
+	  int b;
+	  for (b = 7; b >= 0; b--) {
+	    if (c & (1 << b)) {
+	      putchar('1');
+	    } else {
+	      putchar('0');
+	    }
+	  }
+	  if (s == size / 8 - 1) {
+	    putchar('\n');
+	  } else {
+	    putchar(' ');
+	  }
+	}
+      }
+      putchar('\n');
+    }
 
     free(tmp_buf);
 
@@ -270,7 +400,9 @@ int64_t bshuf_trans_byte_bitrow_scal(const void* in, void* out, const size_t siz
 int64_t bshuf_shuffle_bit_eightelem_scal(const void* in, void* out, \
         const size_t size, const size_t elem_size) {
 
-    size_t ii, jj, kk;
+  /*size_t ii, jj, kk;*/
+  size_t ii, jj;
+  int kk;
     const char *in_b;
     char *out_b;
     uint64_t x, t;
@@ -288,7 +420,13 @@ int64_t bshuf_shuffle_bit_eightelem_scal(const void* in, void* out, \
         for (ii = 0; ii + 8 * elem_size - 1 < nbyte; ii += 8 * elem_size) {
             x = *((uint64_t*) &in_b[ii + jj]);
             TRANS_BIT_8X8(x, t);
+	    /*
             for (kk = 0; kk < 8; kk++) {
+                *((uint8_t*) &out_b[ii + jj / 8 + kk * elem_size]) = x;
+                x = x >> 8;
+            }
+	    */
+            for (kk = 7; kk >= 0; kk--) {
                 *((uint8_t*) &out_b[ii + jj / 8 + kk * elem_size]) = x;
                 x = x >> 8;
             }
@@ -313,6 +451,29 @@ int64_t bshuf_untrans_bit_elem_scal(const void* in, void* out, const size_t size
     count = bshuf_trans_byte_bitrow_scal(in, tmp_buf, size, elem_size);
     CHECK_ERR_FREE(count, tmp_buf);
     count =  bshuf_shuffle_bit_eightelem_scal(tmp_buf, out, size, elem_size);
+    {
+      int s;
+      for (s = 0; s < size; s++) {
+	int e;
+	for (e = 0; e < elem_size; e++) {
+	  unsigned char c = ((char *)out)[s * elem_size + e];
+	  int b;
+	  for (b = 7; b >= 0; b--) {
+	    if (c & (1 << b)) {
+	      putchar('1');
+	    } else {
+	      putchar('0');
+	    }
+	  }
+	  if (e == elem_size - 1) {
+	    putchar('\n');
+	  } else {
+	    putchar(' ');
+	  }
+	}
+      }
+      putchar('\n');
+    }
 
     free(tmp_buf);
 
